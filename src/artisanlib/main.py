@@ -4264,7 +4264,7 @@ class ApplicationWindow(QMainWindow):  # pyright: ignore [reportGeneralTypeIssue
                 self.setWindowTitle(f'{dirtySign}{self.strippedName(self.curFile)} – {appTitle}')
             # no profile loaded
             elif __release_sponsor_name__:
-                self.setWindowTitle(f"{dirtySign}{appTitle} – {__release_sponsor_name__} ({QApplication.translate('About','Release Sponsor')})")
+                self.setWindowTitle(f"{dirtySign}{appTitle}")
             else:
                 self.setWindowTitle(f'{dirtySign}{appTitle}')
         except Exception as e: # pylint: disable=broad-except
@@ -4286,7 +4286,7 @@ class ApplicationWindow(QMainWindow):  # pyright: ignore [reportGeneralTypeIssue
     @pyqtSlot()
     def donate(self) -> None:
         try:
-            everytime = 4*30*24*60*60 # 4 month in seconds
+            everytime = 400*30*24*60*60 # 4 month in seconds
             everystarts = 30 # number of recordings
             starts = None
             lastdonationpopup = None

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # ABOUT
 # RUBASSE CSV Roast Profile importer for Artisan
@@ -13,8 +14,10 @@ if TYPE_CHECKING:
 
 try:
     from PyQt6.QtWidgets import QApplication # @UnusedImport @Reimport  @UnresolvedImport
+    from PyQt6.QtCore import QStringDecoder # @UnusedImport @Reimport  @UnresolvedImport
 except ImportError:
     from PyQt5.QtWidgets import QApplication # type: ignore # @UnusedImport @Reimport  @UnresolvedImport
+    from PyQt5.QtCore import QStringDecoder # type: ignore # @UnusedImport @Reimport  @UnresolvedImport
 
 
 _log: Final[logging.Logger] = logging.getLogger(__name__)
@@ -24,10 +27,12 @@ _log: Final[logging.Logger] = logging.getLogger(__name__)
 # returns a dict containing all profile information contained in the given Rubasse CSV file
 def extractProfileRubasseCSV(file:str, aw:'ApplicationWindow') -> 'ProfileData':
     res:ProfileData = {} # the interpreted data set
-
     res['samplinginterval'] = 1.0
     filename:str = os.path.basename(file)
     res['title'] = filename
+    beanname:str = os.path.splitext(os.path.basename(file))[0]
+    toString = QStringDecoder(QStringDecoder.Encoding.Utf8)
+    res['beans'] = beanname
 
     with open(file, newline='',encoding='utf-8') as csvFile:
         data = csv.reader(csvFile,delimiter=',')
@@ -39,8 +44,11 @@ def extractProfileRubasseCSV(file:str, aw:'ApplicationWindow') -> 'ProfileData':
         fan_last:Optional[float] = None # holds the fan event value before the last one
         heater:Optional[float] = None # holds last processed heater event value
         heater_last:Optional[float] = None # holds the heater event value before the last one
+        drumV:Optional[float] = None # holds last processed heater event value
+        drum_last:Optional[float] = None # holds the heater event value before the last one
         fan_event:bool = False # set to True if a fan event exists
         heater_event:bool = False # set to True if a heater event exists
+        drum_event:bool = False
 
         specialevents:List[int] = []
         specialeventstype:List[int] = []
@@ -58,7 +66,13 @@ def extractProfileRubasseCSV(file:str, aw:'ApplicationWindow') -> 'ProfileData':
         timeindex:List[int] = [-1,0,0,0,0,0,0,0] #CHARGE index init set to -1 as 0 could be an actual index used
 
 
-
+        humidity_last:float = 0.0
+        hum_1:float = 0.0
+        hum_2:float = 0.0
+        hum_3:float = 0.0
+        hum_4:float = 0.0
+        hum_5:float = 0.0
+        
         i = 0
         for row in data:
             items = list(zip(header, row))
@@ -124,6 +138,15 @@ def extractProfileRubasseCSV(file:str, aw:'ApplicationWindow') -> 'ProfileData':
             DT:float = -1.0
             try:
                 DT = float(item['DT'])
+#                DT = float((humidity - humidity_last) * 10.0 + 150.0)
+                DT = float(humidity - humidity_last)
+                humidity_last = humidity
+                hum_5 = hum_4
+                hum_4 = hum_3
+                hum_3 = hum_2
+                hum_2 = hum_1
+                hum_1 = DT 
+                DT = ( hum_1 + hum_2 + hum_3 + hum_4 + hum_5) * 10.0 / 5.0 + 150.0
             except Exception: # pylint: disable=broad-except
                 pass
             extra6.append(DT)
@@ -158,6 +181,7 @@ def extractProfileRubasseCSV(file:str, aw:'ApplicationWindow') -> 'ProfileData':
                             fan_last = None
                 except Exception as e: # pylint: disable=broad-except
                     _log.exception(e)
+            
             if 'Heater' in item:
                 try:
                     vh = item['Heater']
@@ -187,6 +211,36 @@ def extractProfileRubasseCSV(file:str, aw:'ApplicationWindow') -> 'ProfileData':
                             heater_last = None
                 except Exception as e: # pylint: disable=broad-except
                     _log.exception(e)
+
+            if 'Drum' in item:
+                try:
+                    vd = item['Drum']
+                    if vd != '':
+                        v = float(vd)
+                        if drumV is None or v != drumV:
+                            # drum value changed
+                            if drum_last is not None and v == drum_last:
+                                # just a fluctuation, we remove the last added heater value again
+                                drum_last_idx = next(i for i in reversed(range(len(specialeventstype))) if specialeventstype[i] == 1)
+                                del specialeventsvalue[drum_last_idx]
+                                del specialevents[drum_last_idx]
+                                del specialeventstype[drum_last_idx]
+                                del specialeventsStrings[drum_last_idx]
+                                drumV = drum_last
+                                drum_last = None
+                            else:
+                                drum_last = drumV
+                                drumV = v
+                                drum_event = True
+                                v = v/10. + 1
+                                specialeventsvalue.append(v)
+                                specialevents.append(i)
+                                specialeventstype.append(1)
+                                specialeventsStrings.append(f"{float(item['Drum'])} rpm")
+                        else:
+                            drum_last = None
+                except Exception as e: # pylint: disable=broad-except
+                    _log.exception(e)                    
             i = i + 1
 
     # mark CHARGE
@@ -206,7 +260,10 @@ def extractProfileRubasseCSV(file:str, aw:'ApplicationWindow') -> 'ProfileData':
         pass
     # mark SCs
     try:
-        timeindex[4] = max(0,int(header_row[21]))
+        if (max(0,int(header_row[21])) < max(0,int(header_row[19]))):
+            timeindex[1] = max(0,int(header_row[21]))
+        else:
+            timeindex[4] = max(0,int(header_row[21]))    
     except Exception: # pylint: disable=broad-except
         pass
 # not sure if index 23 holds the correct data
@@ -229,14 +286,19 @@ def extractProfileRubasseCSV(file:str, aw:'ApplicationWindow') -> 'ProfileData':
 
     res['extradevices'] = [25,25,25]
     res['extratimex'] = [timex[:],timex[:],timex[:]]
-
-    res['extraname1'] = ['{3}','Moisture','{1}']
+    res['extraname1'] = ['{3}',toString(b'\u6392\u6ebc'),'{1}']
     res['extratemp1'] = [extra1,extra3,extra5]
     res['extramathexpression1'] = ['','','']
+    res['extraCurveVisibility1']=[False, True, False]
+    res['extradevicecolor1'] = ['black', '#55ff00', '#ffaa00']
+    res['extraDelta1'] = [False, False, False]
 
-    res['extraname2'] = ['{0}','Pressure','DT']
+    res['extraname2'] = ['{0}',toString(b'\u58d3\u5dee'),toString(b'\u0394\u6ebc\u5ea6')]
     res['extratemp2'] = [extra2,extra4,extra6]
     res['extramathexpression2'] = ['','','']
+    res['extraCurveVisibility2']=[False, True, True]
+    res['extradevicecolor2'] = ['black', '#ff55ff', '#aaaaff']
+    res['extraDelta2'] = [False, True, False]
 
     if len(specialevents) > 0:
         res['specialevents'] = specialevents
@@ -246,14 +308,14 @@ def extractProfileRubasseCSV(file:str, aw:'ApplicationWindow') -> 'ProfileData':
         if heater_event or fan_event:
             # first set etypes to defaults
             res['etypes'] = [QApplication.translate('ComboBox', 'Air'),
-                             QApplication.translate('ComboBox', 'Drum'),
-                             QApplication.translate('ComboBox', 'Damper'),
+                             toString(b'\u6efe\u7b52'),
+                             'Damper',
                              QApplication.translate('ComboBox', 'Burner'),
                              '--']
             # update
             if fan_event:
-                res['etypes'][0] = 'Fan'
+                res['etypes'][0] = toString(b'\u98a8')
             if heater_event:
-                res['etypes'][3] = 'Heater'
+                res['etypes'][3] = toString(b'\u706b')
 
     return res
