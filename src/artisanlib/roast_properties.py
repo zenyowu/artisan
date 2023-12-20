@@ -2572,6 +2572,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.aw.qmc.beansize_max = self.org_beansize_max
         self.aw.qmc.moisture_greens = self.org_moisture_greens
         self.aw.qmc.roastdate = self.org_roastdate
+        self.aw.qmc.roastepoch = self.aw.qmc.roastdate.toSecsSinceEpoch()
 
         self.aw.qmc.weight = self.org_weight
         self.aw.qmc.volume = self.org_volume
