@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from artisanlib.main import ApplicationWindow # noqa: F401 # pylint: disable=unused-import
     from artisanlib.types import RecentRoast, BTU
     from artisanlib.ble import BleInterface # noqa: F401 # pylint: disable=unused-import
-    from PyQt6.QtWidgets import QLayout, QAbstractItemView, QCompleter # pylint: disable=unused-import
-    from PyQt6.QtGui import QClipboard, QCloseEvent, QKeyEvent, QMouseEvent # pylint: disable=unused-import
+    from PyQt6.QtWidgets import QLayout, QAbstractItemView, QCompleter, QDateTimeEdit # pylint: disable=unused-import
+    from PyQt6.QtGui import QClipboard, QCloseEvent, QKeyEvent # pylint: disable=unused-import
     from PyQt6.QtCore import QObject # pylint: disable=unused-import
 
 
@@ -56,7 +56,7 @@ try:
     from PyQt6.QtWidgets import (QApplication, QWidget, QCheckBox, QComboBox, QDialogButtonBox, QGridLayout, # @UnusedImport @Reimport  @UnresolvedImport
                                  QHBoxLayout, QVBoxLayout, QHeaderView, QLabel, QLineEdit, QTextEdit, QListView,  # @UnusedImport @Reimport  @UnresolvedImport
                                  QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QTabWidget, QSizePolicy, # @UnusedImport @Reimport  @UnresolvedImport
-                                 QGroupBox, QToolButton) # @UnusedImport @Reimport  @UnresolvedImport
+                                 QGroupBox, QToolButton, QDateTimeEdit) # @UnusedImport @Reimport  @UnresolvedImport
 #    from PyQt6 import sip # @UnusedImport @Reimport  @UnresolvedImport
 except ImportError:
     from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QRegularExpression, QSettings, QTimer, QEvent, QLocale # type: ignore # @UnusedImport @Reimport  @UnresolvedImport
@@ -64,7 +64,7 @@ except ImportError:
     from PyQt5.QtWidgets import (QApplication, QWidget, QCheckBox, QComboBox, QDialogButtonBox, QGridLayout, # type: ignore # @UnusedImport @Reimport  @UnresolvedImport
                                  QHBoxLayout, QVBoxLayout, QHeaderView, QLabel, QLineEdit, QTextEdit, QListView, # @UnusedImport @Reimport  @UnresolvedImport
                                  QPushButton, QSpinBox, QTableWidget, QTableWidgetItem, QTabWidget, QSizePolicy, # @UnusedImport @Reimport  @UnresolvedImport
-                                 QGroupBox, QToolButton) # @UnusedImport @Reimport  @UnresolvedImport
+                                 QGroupBox, QToolButton, QDateTimeEdit) # @UnusedImport @Reimport  @UnresolvedImport
 #    try:
 #        from PyQt5 import sip # type: ignore # @Reimport @UnresolvedImport @UnusedImport
 #    except ImportError:
@@ -552,6 +552,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.modified_beansize_min_text:str = str(self.aw.qmc.beansize_min)
         self.modified_beansize_max_text:str = str(self.aw.qmc.beansize_max)
         self.modified_moisture_greens_text:str = str(self.aw.qmc.moisture_greens)
+        self.modified_roastDate:QDateTime = self.aw.qmc.roastdate
 
         # remember parameters set by plus_coffee/plus_blend on entering the dialog to enable a Cancel action
         self.org_beans:str = self.aw.qmc.beans
@@ -560,6 +561,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.org_beansize_min = self.aw.qmc.beansize_min
         self.org_beansize_max = self.aw.qmc.beansize_max
         self.org_moisture_greens = self.aw.qmc.moisture_greens
+        self.org_roastdate = self.aw.qmc.roastdate
 
         self.org_title = self.aw.qmc.title
         self.org_title_show_always = self.aw.qmc.title_show_always
@@ -822,15 +824,17 @@ class editGraphDlg(ArtisanResizeablDialog):
 
         #Date
         datelabel1 = QLabel('<b>' + QApplication.translate('Label', 'Date') + '</b>')
-        date = self.aw.qmc.roastdate.date().toString()
-        date += ', ' + self.aw.qmc.roastdate.time().toString()[:-3]
-        dateedit = QLineEdit(date)
-        dateedit.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        dateedit.setReadOnly(True)
+#        date = self.aw.qmc.roastdate.date().toString()
+#        date += ', ' + self.aw.qmc.roastdate.time().toString()[:-3]
+        self.dateedit = QDateTimeEdit(self.aw.qmc.roastdate)
+        self.dateedit.setDisplayFormat('yyyy/MM/dd hh:mm:ss')
+        self.dateedit.editingFinished.connect(self.roastDateEdited)
+        #dateedit.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.dateedit.setReadOnly(False)
         if self.aw.app.darkmode:
-            dateedit.setStyleSheet('background-color: #757575; color : white;')
+            self.dateedit.setStyleSheet('background-color: #757575; color : white;')
         else:
-            dateedit.setStyleSheet('background-color: #eeeeee;')
+            self.dateedit.setStyleSheet('background-color: #eeeeee;')
         #Batch
         batchlabel = ClickableQLabel('<b>' + QApplication.translate('Label', 'Batch') + '</b>')
         batchlabel.right_clicked.connect(self.enableBatchEdit)
@@ -1211,7 +1215,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         textLayout.setContentsMargins(0,0,0,0)
         textLayout.addWidget(datelabel1,0,0)
         datebatch = QHBoxLayout()
-        datebatch.addWidget(dateedit)
+        datebatch.addWidget(self.dateedit)
         datebatch.addSpacing(15)
         datebatch.addWidget(batchlabel)
         datebatch.addSpacing(7)
@@ -1846,6 +1850,12 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.modified_beans = self.beansedit.toPlainText()
 
     @pyqtSlot()
+    def roastDateEdited(self):
+        self.modified_roastDate = self.dateedit.dateTime()
+        self.aw.qmc.roastdate = self.dateedit.dateTime()
+        self.aw.qmc.roastepoch = self.aw.qmc.roastdate.toSecsSinceEpoch()      
+
+    @pyqtSlot()
     def beanSizeMinEdited(self) -> None:
         self.modified_beansize_min_text = self.bean_size_min_edit.text()
 
@@ -2164,6 +2174,7 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.bean_size_min_edit.setText(self.modified_beansize_min_text)
         self.bean_size_max_edit.setText(self.modified_beansize_max_text)
         self.moisture_greens_edit.setText(self.modified_moisture_greens_text)
+        self.dateedit.setDateTime(self.modified_roastDate)
         self.markPlusCoffeeFields(False)
         self.density_in_editing_finished()
         self.moistureEdited()
@@ -2558,6 +2569,8 @@ class editGraphDlg(ArtisanResizeablDialog):
         self.aw.qmc.beansize_min = self.org_beansize_min
         self.aw.qmc.beansize_max = self.org_beansize_max
         self.aw.qmc.moisture_greens = self.org_moisture_greens
+        self.aw.qmc.roastdate = self.org_roastdate
+        self.aw.qmc.roastepoch = self.aw.qmc.roastdate.toSecsSinceEpoch()
 
         self.aw.qmc.weight = self.org_weight
         self.aw.qmc.volume = self.org_volume
