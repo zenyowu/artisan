@@ -8015,7 +8015,7 @@ class tgraphcanvas(FigureCanvas):
                                 titleB = f'{self.roastbatchprefixB}{self.roastbatchnrB} {self.titleB}'
                         elif __release_sponsor_domain__:
                             sponsor = QApplication.translate('About','sponsored by {}').format(__release_sponsor_domain__)
-                            titleB = f'\n{sponsor}'
+                            titleB = ''
 
                     # extra event names with substitution of event names applied
                     extraname1_subst = self.extraname1[:]
